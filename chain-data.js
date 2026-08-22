@@ -38,5 +38,23 @@ const YORK_ENTRY = {
   ]
 };
 
+const FRANKFURT_ENTRY = {
+  title: 'פרנקפורט',
+  type: 'מקום / עיר',
+  subtitle: 'פרנקפורט על המיין (Frankfurt am Main), העיר הגדולה במדינת הסן שבגרמניה',
+  meaning: 'השם Frankfurt מורכב משני רכיבים גרמניים היסטוריים: Frank — הפרנקים, ו־Furt — מעברה רדודה בנהר שאפשר לחצות בה ברגל. כלומר: „המעברה של הפרנקים”.',
+  originStory: 'האזור שעל גדת נהר המיין היה נקודת חצייה חשובה. לאחר שהפרנקים השתלטו על האזור, המקום נודע בשם Franconofurd — „מעברת הפרנקים”. הצורה הזאת מתועדת לראשונה בשנת 794 במסמך מתקופת קרל הגדול. במשך מאות שנים הכתיב וההגייה השתנו עד לצורה המודרנית Frankfurt. התוספת am Main פירושה „על המיין”, והיא מבדילה את העיר מפרנקפורט אחרת בגרמניה — Frankfurt (Oder).',
+  path: ['הפרנקים (Franken)', 'Furt — מעברה בנהר', 'Franconofurd — 794', 'Frankfurt', 'Frankfurt am Main — פרנקפורט על המיין'],
+  changes: 'הצורה המתועדת הקדומה Franconofurd מופיעה בשנת 794. ברבות השנים התקצרה והשתנתה לצורות ביניים שונות ולבסוף Frankfurt. הרכיב Furt נשאר ברור גם בגרמנית המודרנית כשם היסטורי למעבר רדוד בנהר.',
+  certainty: 'רמת הוודאות גבוהה. עיריית פרנקפורט עצמה מסבירה שהגבעה ליד המעברה נקראה Franconofurd — „מעברת הפרנקים”, והשם מופיע במסמך משנת 794. לכן זהו מקרה שבו גם הצורה הקדומה וגם משמעות מרכיבי השם מתועדות היטב.',
+  plainLanguage: 'בקיצור: פרנקפורט פירושה „המעברה של הפרנקים”. במקום הייתה נקודת חצייה נוחה של נהר המיין, והפרנקים נתנו למקום את שמו. השם העתיק Franconofurd התגלגל במשך יותר מאלף שנה ל־Frankfurt.',
+  sources: [
+    { name: 'עיריית פרנקפורט — ההיסטוריה הקדומה: Franconofurd', url: 'https://frankfurt.de/frankfurt-entdecken-und-erleben/stadtportrait/stadtgeschichte/historie/vorgeschichte-und-fruehes-mittelalter' },
+    { name: 'עיריית פרנקפורט — History', url: 'https://frankfurt.de/english/discover-and-experience/about-frankfurt/history' },
+    { name: 'עיריית פרנקפורט — נהר המיין והמעברה ההיסטורית', url: 'https://frankfurt.de/themen/umwelt-und-gruen/orte/stadtgewaesser/main' }
+  ]
+};
+
 registerChainEntry(['ניו יורק', 'new york', 'new york city', 'ניו-יורק'], NEW_YORK_ENTRY);
 registerChainEntry(['יורק', 'york'], YORK_ENTRY);
+registerChainEntry(['פרנקפורט', 'frankfurt', 'frankfurt am main', 'פרנקפורט על המיין', 'פרנקפורט אם מיין'], FRANKFURT_ENTRY);
