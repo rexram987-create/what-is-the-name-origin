@@ -1,4 +1,4 @@
-// Disambiguation layer v0.4.1
+// Disambiguation layer v0.5.3
 // Keep the canonical name separate from the chosen meaning/context.
 (() => {
   const choices = {
@@ -30,11 +30,8 @@
   const status = document.getElementById('status');
   if (!form || !input || !statusSection || !status) return;
 
-  const originalRequestSubmit = form.requestSubmit.bind(form);
   let bypass = false;
-
   window.NAME_ORIGIN_CONTEXT = null;
-
   function normalize(value) { return value.trim().toLowerCase(); }
 
   function renderChoices(raw, options) {
@@ -52,9 +49,12 @@
       button.textContent = option.label;
       button.addEventListener('click', () => {
         window.NAME_ORIGIN_CONTEXT = { original: raw, canonicalName: option.name, ...option.context };
-        input.value = option.name; // Search only the canonical entity name; context stays separate.
+        input.value = option.name;
+        // Dispatch a fresh submit event so the context-resolver can intercept it.
+        // The old implementation called a saved native requestSubmit(), which skipped
+        // the resolver's intended handoff and let the generic picker run immediately.
         bypass = true;
-        originalRequestSubmit();
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       });
       wrap.appendChild(button);
     });
