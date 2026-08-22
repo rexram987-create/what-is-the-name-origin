@@ -6,7 +6,7 @@
   <meta name="description" content="מה מקור השם? — יישומון אטימולוגי רב־לשוני בשפה פשוטה" />
   <meta name="theme-color" content="#111615" />
   <title>מה מקור השם?</title>
-  <link rel="stylesheet" href="styles.css?v=0.1.5" />
+  <link rel="stylesheet" href="styles.css?v=0.2.0" />
 </head>
 <body>
   <header class="site-header">
@@ -15,7 +15,7 @@
         <span class="brand-mark" aria-hidden="true">א</span>
         <span>מה מקור השם?</span>
       </a>
-      <span class="version">גרסה 0.1.5</span>
+      <span class="version">גרסה 0.2.0</span>
     </div>
   </header>
 
@@ -24,7 +24,7 @@
       <div class="shell hero-inner">
         <p class="eyebrow">אטימולוגיה לכולם</p>
         <h1>לכל שם יש סיפור.<br />בואו נגלה אותו.</h1>
-        <p class="lead">הקלידו שם של אדם, עיר, מדינה, מקום או מילה — בכל שפה. ננסה לעקוב אחרי המקור, המשמעות והדרך שעבר השם לאורך הזמן.</p>
+        <p class="lead">הקלידו שם של אדם, עיר, מדינה, מקום או מילה — בכל שפה. ננסה לפרק את השם לרכיבים, להשוות כמה מקורות ולבנות שרשרת אטימולוגית בזהירות.</p>
 
         <form id="searchForm" class="search" role="search">
           <label class="sr-only" for="query">שם לחיפוש</label>
@@ -89,7 +89,7 @@
           </section>
 
           <section class="info-section">
-            <h3><span aria-hidden="true">🤔</span> עד כמה אנחנו בטוחים?</h3>
+            <h3><span aria-hidden="true">🔎</span> השוואת מקורות ורמת ודאות</h3>
             <p id="certainty"></p>
           </section>
         </div>
@@ -102,7 +102,7 @@
         <section class="sources">
           <h3>מקורות</h3>
           <ul id="sourcesList"></ul>
-          <p class="source-note">היישומון מציג מידע ממקורות פתוחים ומסמן במפורש כאשר לא נמצאה אטימולוגיה מספקת. המטרה היא לא להמציא תשובה כשאין ודאות.</p>
+          <p class="source-note">היישומון משווה מקורות פתוחים בכמה שפות, אבל מציג הסבר עברי רק כאשר אפשר לעשות זאת בזהירות. אם אין מספיק בסיס — הוא אומר זאת במקום לנחש.</p>
         </section>
       </article>
     </section>
@@ -112,16 +112,18 @@
       <div class="principles-grid">
         <article><strong>פשוט</strong><span>מסבירים מונחים מקצועיים בשפה שכל אחד יכול להבין.</span></article>
         <article><strong>זהיר</strong><span>מבדילים בין עובדה, השערה ומקור שאינו ודאי.</span></article>
-        <article><strong>עמוק</strong><span>מנסים להגיע לצורות הקדומות ולסיפור ההיסטורי שמאחורי השם.</span></article>
+        <article><strong>עמוק</strong><span>מפרקים שמות מורכבים, משווים מקורות ומנסים ללכת אחורה שלב־שלב.</span></article>
       </div>
     </section>
   </main>
 
   <footer>
-    <div class="shell">מה מקור השם? · גרסת ניסוי 0.1.5 · מקורות פתוחים: Wikidata, Wikipedia, Wiktionary ומקורות היסטוריים נבחרים</div>
+    <div class="shell">מה מקור השם? · גרסת ניסוי 0.2.0 · Wikidata, Wikipedia, Wiktionary ומקורות היסטוריים נבחרים</div>
   </footer>
 
-  <script src="app.js?v=0.1.5"></script>
-  <script src="chain-data.js?v=0.1.5"></script>
+  <script src="app.js?v=0.2.0"></script>
+  <script src="chain-data.js?v=0.2.0"></script>
+  <script src="curated-guard.js?v=0.2.0"></script>
+  <script src="engine-v2.js?v=0.2.0"></script>
 </body>
 </html>
