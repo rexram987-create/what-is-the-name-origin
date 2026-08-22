@@ -1,41 +1,26 @@
-// Disambiguation layer v0.4.0
-// Ask the user when a bare name has more than one important meaning.
+// Disambiguation layer v0.4.1
+// Keep the canonical name separate from the chosen meaning/context.
 (() => {
   const choices = {
     'סופיה': [
-      { label: '👤 סופיה — שם פרטי', query: 'השם הפרטי סופיה' },
-      { label: '🏙️ סופיה — בירת בולגריה', query: 'סופיה בולגריה' }
+      { label: '👤 סופיה — שם פרטי', name: 'Sophia', context: { kind: 'given-name', label: 'שם פרטי' } },
+      { label: '🏙️ סופיה — בירת בולגריה', name: 'Sofia', context: { kind: 'city', country: 'Bulgaria', label: 'בירת בולגריה' } }
     ],
     'sophia': [
-      { label: '👤 Sophia — שם פרטי', query: 'Sophia given name' },
-      { label: '🏙️ Sofia — בירת בולגריה', query: 'Sofia Bulgaria' }
+      { label: '👤 Sophia — שם פרטי', name: 'Sophia', context: { kind: 'given-name', label: 'שם פרטי' } },
+      { label: '🏙️ Sofia — בירת בולגריה', name: 'Sofia', context: { kind: 'city', country: 'Bulgaria', label: 'בירת בולגריה' } }
     ],
     'sofia': [
-      { label: '🏙️ Sofia — בירת בולגריה', query: 'Sofia Bulgaria' },
-      { label: '👤 Sofia — שם פרטי', query: 'Sofia given name' }
+      { label: '🏙️ Sofia — בירת בולגריה', name: 'Sofia', context: { kind: 'city', country: 'Bulgaria', label: 'בירת בולגריה' } },
+      { label: '👤 Sofia — שם פרטי', name: 'Sofia', context: { kind: 'given-name', label: 'שם פרטי' } }
     ],
     'שרלוט': [
-      { label: '👤 שרלוט — שם פרטי', query: 'Charlotte given name' },
-      { label: '🏙️ שרלוט — העיר בצפון קרוליינה', query: 'Charlotte North Carolina' }
+      { label: '👤 שרלוט — שם פרטי', name: 'Charlotte', context: { kind: 'given-name', label: 'שם פרטי' } },
+      { label: '🏙️ שרלוט — העיר בצפון קרוליינה', name: 'Charlotte', context: { kind: 'city', region: 'North Carolina', country: 'United States', label: 'עיר בצפון קרוליינה' } }
     ],
     'charlotte': [
-      { label: '👤 Charlotte — שם פרטי', query: 'Charlotte given name' },
-      { label: '🏙️ Charlotte — צפון קרוליינה', query: 'Charlotte North Carolina' }
-    ],
-    'ג׳ורג׳יה': [
-      { label: '🌍 ג׳ורג׳יה — המדינה בארה״ב', query: 'Georgia U.S. state' },
-      { label: '🌍 גאורגיה — המדינה בקווקז', query: 'Georgia country' },
-      { label: '👤 Georgia — שם פרטי', query: 'Georgia given name' }
-    ],
-    'גאורגיה': [
-      { label: '🌍 גאורגיה — המדינה בקווקז', query: 'Georgia country' },
-      { label: '🌍 ג׳ורג׳יה — המדינה בארה״ב', query: 'Georgia U.S. state' },
-      { label: '👤 Georgia — שם פרטי', query: 'Georgia given name' }
-    ],
-    'georgia': [
-      { label: '🌍 Georgia — המדינה בקווקז', query: 'Georgia country' },
-      { label: '🌍 Georgia — המדינה בארה״ב', query: 'Georgia U.S. state' },
-      { label: '👤 Georgia — שם פרטי', query: 'Georgia given name' }
+      { label: '👤 Charlotte — שם פרטי', name: 'Charlotte', context: { kind: 'given-name', label: 'שם פרטי' } },
+      { label: '🏙️ Charlotte — צפון קרוליינה', name: 'Charlotte', context: { kind: 'city', region: 'North Carolina', country: 'United States', label: 'עיר בצפון קרוליינה' } }
     ]
   };
 
@@ -48,9 +33,9 @@
   const originalRequestSubmit = form.requestSubmit.bind(form);
   let bypass = false;
 
-  function normalize(value) {
-    return value.trim().toLowerCase().replace(/[״”]/g, '"').replace(/[׳’]/g, "'");
-  }
+  window.NAME_ORIGIN_CONTEXT = null;
+
+  function normalize(value) { return value.trim().toLowerCase(); }
 
   function renderChoices(raw, options) {
     statusSection.hidden = false;
@@ -66,7 +51,8 @@
       button.className = 'meaning-choice';
       button.textContent = option.label;
       button.addEventListener('click', () => {
-        input.value = option.query;
+        window.NAME_ORIGIN_CONTEXT = { original: raw, canonicalName: option.name, ...option.context };
+        input.value = option.name; // Search only the canonical entity name; context stays separate.
         bypass = true;
         originalRequestSubmit();
       });
@@ -75,9 +61,9 @@
     status.appendChild(wrap);
   }
 
-  // Capture before app.js' submit listener. Bare ambiguous terms pause for a choice.
   form.addEventListener('submit', event => {
     if (bypass) { bypass = false; return; }
+    window.NAME_ORIGIN_CONTEXT = null;
     const raw = input.value.trim();
     const options = choices[normalize(raw)];
     if (!options) return;
