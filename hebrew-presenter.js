@@ -13,17 +13,32 @@
     for(const re of [/(?:Greek|Ancient Greek)\s*\(([^)]+)\)/i,/(?:Latin|Greek|Hebrew|Arabic|French|German|Italian|Spanish)\s+([\p{L}\p{M}'’-]{2,50})/iu,/\(([\p{L}\p{M}'’-]{2,50})\)/u]){ const m=s.match(re); if(m?.[1]) return m[1].trim(); }
     return '';
   }
+  function baseTerm(v=''){
+    return String(v).split(/\s+[—–-]\s+/)[0].replace(/\s*\([^)]*\)\s*$/,'').trim();
+  }
+  function richness(v=''){
+    const s=String(v); let score=s.length;
+    if(/[—–]/.test(s)) score+=40;
+    if(/[\u0370-\u03FF]/.test(s)) score+=60;
+    if(/יוונית|לטינית|עברית|צרפתית|גרמנית|ערבית|איטלקית|ספרדית/.test(s)) score+=25;
+    return score;
+  }
   function cleanPath(path=[],title=''){
-    const out=[], seen=new Set();
+    const out=[], byBase=new Map();
     for(const step of path||[]){
       let v=String(step||'').replace(/\s+/g,' ').trim(); if(!v) continue;
       if(v.length>120 || (mostlyEnglish(v)&&v.split(/\s+/).length>10)) v=shortTerm(v); else v=langHe(v);
       v=String(v||'').trim(); if(!v) continue;
-      const key=norm(v); if(!key||seen.has(key)) continue;
-      seen.add(key); out.push(v);
+      const key=norm(baseTerm(v))||norm(v); if(!key) continue;
+      if(byBase.has(key)){
+        const index=byBase.get(key);
+        if(richness(v)>richness(out[index])) out[index]=v;
+        continue;
+      }
+      byBase.set(key,out.length); out.push(v);
     }
     const titleKey=norm(title);
-    if(title && titleKey && !out.some(x=>norm(x)===titleKey)) out.push(title);
+    if(title && titleKey && !out.some(x=>norm(baseTerm(x))===titleKey)) out.push(title);
     return out.slice(0,8);
   }
   function meaningHe(result={}){
@@ -36,14 +51,14 @@
   function rewrite(result){
     if(!result||result.type!=='שם פרטי') return result;
     const title=String(result.title||'השם'), meaning=meaningHe(result), path=cleanPath(result.path,title);
-    const titleKey=norm(title), useful=path.filter(x=>norm(x)!==titleKey&&!/הצורה שחיפשת/.test(x));
+    const titleKey=norm(title), useful=path.filter(x=>norm(baseTerm(x))!==titleKey&&!/הצורה שחיפשת/.test(x));
     const earliest=useful[0]||'', chain=path.join(' ← ');
     const r={...result,path};
     r.simpleSummary=earliest?`נמצא מסלול אטימולוגי לשם ${title}. אחת הצורות הקדומות או רכיבי המקור שנמצאו היא ${earliest}, והמשמעות שנמצאה היא „${meaning}”.`:`נמצא מידע אטימולוגי לשם ${title}, והמשמעות היא „${meaning}”.`;
     r.whatIsIt=`${title} הוא שם פרטי. המידע מן המקורות מעובד ומוצג כאן בעברית פשוטה.`;
     r.meaning=`המשמעות האטימולוגית שנמצאה היא „${meaning}”.`;
     r.originStory=chain?`לפי המקורות שנמצאו, השרשרת האטימולוגית היא: ${chain}. צורות המקור נשמרות כפי שהן, וההסבר מסביבן מוצג בעברית.`:'נמצא מקור אטימולוגי לשם, אך לא נמצאו מספיק שלבים כדי להציג שרשרת מלאה.';
-    r.changes=path.length>2?'נמצאו כמה צורות או שלבי ביניים. כפילויות זהות מוסרות אוטומטית, והשרשרת מוצגת מן המקורות הקדומים אל הצורה שחיפשת.':'לא נמצאו מספיק שלבי ביניים מתועדים כדי להציג ציר שינוי מלא.';
+    r.changes=path.length>2?'נמצאו כמה צורות או שלבי ביניים. צורות זהות של אותו שם מאוחדות אוטומטית, והגרסה המפורטת יותר נשמרת.':'לא נמצאו מספיק שלבי ביניים מתועדים כדי להציג ציר שינוי מלא.';
     r.plainLanguage=earliest?`בקיצור: ${title} התפתח דרך צורות קדומות יותר, ובהן ${earliest}. המשמעות שנמצאה במקורות היא „${meaning}”.`:`בקיצור: נמצאה לשם ${title} משמעות אטימולוגית: „${meaning}”.`;
     for(const key of ['simpleSummary','whatIsIt','meaning','originStory','changes','certainty','plainLanguage']) if(mostlyEnglish(r[key])) r[key]='המידע נמצא במקור והוא מוצג כאן בעברית פשוטה. לפרטים המדויקים אפשר לפתוח את המקור המצורף.';
     return r;
