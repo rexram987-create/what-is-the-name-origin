@@ -1,4 +1,4 @@
-// Generic compound-name meaning layer v0.8.9
+// Generic compound-name meaning layer v0.9.0
 (() => {
   const MAP = [
     {re:/ward off|keep off|turn away|defend|protect|repel/i, he:'להגן / להדוף', role:'defense'},
@@ -18,15 +18,21 @@
   function add(out,term,gloss){const t=clean(term),g=clean(gloss),tr=translateGloss(g);if(t&&tr)out.push({term:t,gloss:g,he:tr.he,role:tr.role});}
   function extractComponents(text=''){
     const t=clean(text).slice(0,30000);if(!t)return[];const out=[];
-    // Deliberately use broad Unicode-safe token captures instead of fragile character ranges.
     const patterns=[
       /(?:from|of)\s+(?:the\s+)?(?:Ancient\s+)?Greek\s+([^\s,.;()]{2,80})[^.]{0,180}?(?:meaning|means)\s+[“"'‘’]?([^”"'‘’.;]{1,120})/giu,
       /([^\s,.;()]{2,80})\s+meaning\s+([^.;]{1,120})/giu
     ];
-    for(const re of patterns){let m;while((m=re.exec(t))!==null){add(out,m[1],m[2]);if(out.length>=10)break;}}
-    // Common construction: "aléxein meaning ... and andrós ... meaning man".
-    const pair=/([^\s,.;()]{2,60})\s+meaning\s+([^.;]{1,120}?)\s+and\s+([^\s,.;()]{2,60})(?:,\s*[^.;]{0,80})?\s+meaning\s+([^.;]{1,120})/giu;
+    for(const re of patterns){let m;while((m=re.exec(t))!==null){add(out,m[1],m[2]);if(out.length>=12)break;}}
+
+    // Compound construction: “X meaning ... and Y ... meaning ...”.
+    const pair=/([^\s,.;()]{2,60})\s+meaning\s+([^.;]{1,140}?)\s+and\s+([^\s,.;()]{2,60})(?:,\s*[^.;]{0,100})?\s+meaning\s+([^.;]{1,120})/giu;
     let p;while((p=pair.exec(t))!==null){add(out,p[1],p[2]);add(out,p[3],p[4]);}
+
+    // Morphological construction common in dictionaries: “andrós, genitive of anḗr meaning man”.
+    // The semantic gloss belongs to the lexical component even when the dictionary gives its base form in between.
+    const inflected=/([^\s,.;()]{2,60})\s*,\s*(?:genitive|accusative|dative|plural|inflected form)\s+of\s+([^\s,.;()]{2,60})\s+(?:meaning|means)\s+([^.;]{1,120})/giu;
+    let f;while((f=inflected.exec(t))!==null){add(out,f[1],f[3]);add(out,f[2],f[3]);}
+
     return uniqBy(out,x=>`${x.term.toLowerCase()}|${x.role}`);
   }
   function directWholeMeaning(text=''){
@@ -38,18 +44,20 @@
   function enrich(result,research){
     if(!result||result.type!=='שם פרטי'||!research)return result;
     const texts=(research.pages||[]).map(p=>[p.text,p.extract,p.etymology].filter(Boolean).join(' ')).filter(Boolean);
-    // The engine may already have captured a long infobox root/gloss; include the rendered fields too.
     texts.push([result.originStory,result.meaning,result.simpleSummary].filter(Boolean).join(' '));
-    let components=[];for(const t of texts)components.push(...extractComponents(t));components=uniqBy(components,x=>`${x.term.toLowerCase()}|${x.role}`).slice(0,6);
+    let components=[];for(const t of texts)components.push(...extractComponents(t));components=uniqBy(components,x=>`${x.term.toLowerCase()}|${x.role}`).slice(0,8);
     let whole='';for(const t of texts){whole=directWholeMeaning(t);if(whole)break;}if(!whole)whole=synthesize(components);
     if(!whole)return result;
-    const componentText=components.slice(0,4).map(x=>`${x.term} — „${x.he}”`).join('; ');
-    const path=[...(result.path||[])];for(const c of components.slice(0,4))if(!path.some(x=>String(x).toLowerCase().includes(c.term.toLowerCase())))path.unshift(`${c.term} — ${c.he}`);
+
+    // Show one representative term per semantic role, so inflected/base variants do not clutter the explanation.
+    const displayComponents=uniqBy(components,x=>x.role).slice(0,4);
+    const componentText=displayComponents.map(x=>`${x.term} — „${x.he}”`).join('; ');
+    const path=[...(result.path||[])];for(const c of displayComponents)if(!path.some(x=>String(x).toLowerCase().includes(c.term.toLowerCase())))path.unshift(`${c.term} — ${c.he}`);
     return {...result,
       meaning:componentText?`השם מורכב מרכיבים שמשמעותם ${componentText}. משמעות השם בכללותו היא בקירוב „${whole}”.`:`משמעות השם בכללותו היא בקירוב „${whole}”.`,
       simpleSummary:`משמעות השם בכללותו היא בקירוב „${whole}”.`,
-      plainLanguage:`בקיצור: משמעות השם השלם היא בקירוב „${whole}”, ולא רק „אדם / איש”.`,
-      originStory:componentText?`המקורות מציגים יותר מרכיב אטימולוגי אחד: ${componentText}. לכן יש להבחין בין משמעות הרכיבים לבין משמעות השם כולו.`:(result.originStory||''),
+      plainLanguage:`בקיצור: משמעות השם השלם היא בקירוב „${whole}”.`,
+      originStory:componentText?`המקורות מציגים יותר מרכיב אטימולוגי אחד: ${componentText}. לכן יש להבחין בין משמעות כל רכיב לבין משמעות השם כולו.`:(result.originStory||''),
       path
     };
   }
