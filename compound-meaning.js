@@ -1,4 +1,4 @@
-// Generic compound-name meaning layer v0.9.0
+// Generic compound-name meaning layer v0.9.2
 (() => {
   const MAP = [
     {re:/ward off|keep off|turn away|defend|protect|repel/i, he:'להגן / להדוף', role:'defense'},
@@ -16,6 +16,7 @@
   const uniqBy=(arr,keyFn)=>{const seen=new Set();return arr.filter(x=>{const k=keyFn(x);if(seen.has(k))return false;seen.add(k);return true;});};
   function translateGloss(gloss=''){const g=clean(gloss).toLowerCase();const hit=MAP.find(x=>x.re.test(g));return hit?{he:hit.he,role:hit.role,raw:g}:null;}
   function add(out,term,gloss){const t=clean(term),g=clean(gloss),tr=translateGloss(g);if(t&&tr)out.push({term:t,gloss:g,he:tr.he,role:tr.role});}
+
   function extractComponents(text=''){
     const t=clean(text).slice(0,30000);if(!t)return[];const out=[];
     const patterns=[
@@ -24,43 +25,46 @@
     ];
     for(const re of patterns){let m;while((m=re.exec(t))!==null){add(out,m[1],m[2]);if(out.length>=12)break;}}
 
-    // Compound construction: “X meaning ... and Y ... meaning ...”.
-    const pair=/([^\s,.;()]{2,60})\s+meaning\s+([^.;]{1,140}?)\s+and\s+([^\s,.;()]{2,60})(?:,\s*[^.;]{0,100})?\s+meaning\s+([^.;]{1,120})/giu;
-    let p;while((p=pair.exec(t))!==null){add(out,p[1],p[2]);add(out,p[3],p[4]);}
+    // Handles: "aléxein meaning to ward off ... and andrós, genitive of anḗr meaning man".
+    const compound=/([^\s,.;()]{2,60})\s+meaning\s+([^.;]{1,180}?)\s+and\s+([^\s,.;()]{2,60})\s*,\s*(?:genitive|accusative|dative|plural|inflected form)\s+of\s+([^\s,.;()]{2,60})\s+(?:meaning|means)\s+([^.;]{1,120})/giu;
+    let c;while((c=compound.exec(t))!==null){add(out,c[1],c[2]);add(out,`${c[3]} / ${c[4]}`,c[5]);}
 
-    // Morphological construction common in dictionaries: “andrós, genitive of anḗr meaning man”.
-    // The semantic gloss belongs to the lexical component even when the dictionary gives its base form in between.
     const inflected=/([^\s,.;()]{2,60})\s*,\s*(?:genitive|accusative|dative|plural|inflected form)\s+of\s+([^\s,.;()]{2,60})\s+(?:meaning|means)\s+([^.;]{1,120})/giu;
-    let f;while((f=inflected.exec(t))!==null){add(out,f[1],f[3]);add(out,f[2],f[3]);}
+    let f;while((f=inflected.exec(t))!==null){add(out,`${f[1]} / ${f[2]}`,f[3]);}
 
     return uniqBy(out,x=>`${x.term.toLowerCase()}|${x.role}`);
   }
-  function directWholeMeaning(text=''){
-    const t=clean(text);
-    if(/defender|protector/i.test(t)&&/(?:of\s+)?(?:man|men|people|mankind|humans?)/i.test(t)) return 'מגן האנשים';
-    return '';
-  }
+
+  function directWholeMeaning(text=''){const t=clean(text);if(/defender|protector/i.test(t)&&/(?:of\s+)?(?:man|men|people|mankind|humans?)/i.test(t))return'מגן האנשים';return'';}
   function synthesize(components=[]){const roles=new Set(components.map(x=>x.role));if(roles.has('defense')&&roles.has('person'))return'מגן האנשים';const hes=uniqBy(components,x=>x.role).map(x=>x.he);return hes.length>=2?hes.join(' + '):'';}
+
   function enrich(result,research){
     if(!result||result.type!=='שם פרטי'||!research)return result;
     const texts=(research.pages||[]).map(p=>[p.text,p.extract,p.etymology].filter(Boolean).join(' ')).filter(Boolean);
-    texts.push([result.originStory,result.meaning,result.simpleSummary].filter(Boolean).join(' '));
+    // Crucial: the engine's best infobox evidence can contain the full compound analysis even when page extracts do not.
+    texts.push([research.ev?.root,research.ev?.gloss,result.originStory,result.meaning,result.simpleSummary].filter(Boolean).join(' '));
+
     let components=[];for(const t of texts)components.push(...extractComponents(t));components=uniqBy(components,x=>`${x.term.toLowerCase()}|${x.role}`).slice(0,8);
-    let whole='';for(const t of texts){whole=directWholeMeaning(t);if(whole)break;}if(!whole)whole=synthesize(components);
+    const displayComponents=uniqBy(components,x=>x.role).slice(0,4);
+    let whole='';for(const t of texts){whole=directWholeMeaning(t);if(whole)break;}if(!whole)whole=synthesize(displayComponents);
     if(!whole)return result;
 
-    // Show one representative term per semantic role, so inflected/base variants do not clutter the explanation.
-    const displayComponents=uniqBy(components,x=>x.role).slice(0,4);
     const componentText=displayComponents.map(x=>`${x.term} — „${x.he}”`).join('; ');
-    const path=[...(result.path||[])];for(const c of displayComponents)if(!path.some(x=>String(x).toLowerCase().includes(c.term.toLowerCase())))path.unshift(`${c.term} — ${c.he}`);
+    let path=[...(result.path||[])];
+    // Components belong at the beginning of the derivational chain and must remain visible even when a whole-name meaning is known.
+    for(const comp of [...displayComponents].reverse()){
+      if(!path.some(x=>String(x).toLowerCase().includes(comp.term.toLowerCase()))) path.unshift(`${comp.term} — ${comp.he}`);
+    }
+    // Keep whole meaning as an explanatory result, not as a replacement for the chain.
     return {...result,
-      meaning:componentText?`השם מורכב מרכיבים שמשמעותם ${componentText}. משמעות השם בכללותו היא בקירוב „${whole}”.`:`משמעות השם בכללותו היא בקירוב „${whole}”.`,
-      simpleSummary:`משמעות השם בכללותו היא בקירוב „${whole}”.`,
-      plainLanguage:`בקיצור: משמעות השם השלם היא בקירוב „${whole}”.`,
-      originStory:componentText?`המקורות מציגים יותר מרכיב אטימולוגי אחד: ${componentText}. לכן יש להבחין בין משמעות כל רכיב לבין משמעות השם כולו.`:(result.originStory||''),
+      meaning:componentText?`רכיבי השם הם: ${componentText}. משמעות השם בכללותו היא בקירוב „${whole}”.`:`משמעות השם בכללותו היא בקירוב „${whole}”.`,
+      simpleSummary:`משמעות השם בכללותו היא בקירוב „${whole}”, והיא נבנית מן הרכיבים האטימולוגיים המוצגים בשרשרת.`,
+      plainLanguage:`בקיצור: הרכיבים נשמרים בנפרד, ומשמעות השם השלם היא בקירוב „${whole}”.`,
+      originStory:componentText?`המקורות מפרקים את השם לכמה רכיבים: ${componentText}. אחריהם מופיעות צורות הביניים והשם המודרני.`:(result.originStory||''),
       path
     };
   }
+
   async function install(){const e=window.GivenNameEtymology;if(!e?.build||!e?.research||e.__compoundWrapped)return;const build=e.build.bind(e),research=e.research.bind(e);e.build=async input=>{const [result,r]=await Promise.all([build(input),research(input)]);return enrich(result,r);};e.__compoundWrapped=true;}
   install();window.addEventListener('DOMContentLoaded',install);window.NameOriginCompoundMeaning={extractComponents,synthesize,enrich};
 })();
