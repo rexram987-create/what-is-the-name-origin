@@ -65,11 +65,12 @@
 
   function relationEvidence(text,current=''){
     const t=clean(text).slice(0,5000);if(!t)return null;
+    const rejected=new Set(['a','an','and','are','as','be','been','being','by','can','for','from','has','have','in','is','it','jan','of','on','or','that','the','this','to','was','were','with']);
     const patterns=[
       /(?:Latinate(?: and Italian)?|Latinized|Italian|French|Spanish|English)?\s*(?:form|variant|alternative form)\s+of\s+([A-Z][A-Za-zÀ-ÿ'’-]{1,50})/i,
       /(?:derived|borrowed)\s+from\s+(?:(?:Old )?[A-Z][A-Za-z ]+\s+)?([A-Z][A-Za-zÀ-ÿ'’-]{1,50})(?:\s|,|\.|$)/i
     ];
-    for(const r of patterns){const m=t.match(r);if(m&&m[1]&&m[1].toLowerCase()!==String(current).toLowerCase())return strip(m[1]);}
+    for(const r of patterns){const m=t.match(r),candidate=strip(m?.[1]);if(candidate&&candidate.toLowerCase()!==String(current).toLowerCase()&&!rejected.has(candidate.toLowerCase()))return candidate;}
     return null;
   }
 

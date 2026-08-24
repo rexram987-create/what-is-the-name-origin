@@ -1,4 +1,4 @@
-// Structured etymology orchestration v1.0.1
+// Structured etymology orchestration v1.1.2
 // Builds a stable schema first; legacy research is optional rather than a hard dependency.
 (() => {
   const D=()=>window.NameOriginDiagnostics;
@@ -76,6 +76,7 @@
     if(roles.some(x=>x==='אל')&&roles.some(x=>x==='מתנה'))whole='מתנת האל';
     return {input,canonical:research?.canonical||input,forms:extractForms(research,input,corpus),components,wholeMeaning:whole,sourceGloss:clean(research?.ev?.gloss),sources:uniq((research?.pages||[]).filter(p=>p.url).map(p=>({name:p.host.includes('wiktionary')?`Wiktionary — ${p.title}`:`Wikipedia — ${p.title}`,url:p.url})),x=>x.url)};
   }
+  function isUseful(m){return Boolean(m&&(m.wholeMeaning||m.components?.length));}
   function render(m){
     const comp=m.components.slice(0,5),compText=comp.map(c=>`${c.base?`${c.term} / ${c.base}`:c.term} — „${c.he}”`).join('; '),path=[];
     for(const c of comp)path.push(`${c.base?`${c.term} / ${c.base}`:c.term} — ${c.he}`);
@@ -85,7 +86,28 @@
   }
   function install(){
     const e=window.GivenNameEtymology;if(!e||e.__structuredWrapped)return;
-    e.build=async input=>{D()?.push('structured.start','info',{input});let r=null;try{r=await e.research?.(input);}catch(err){D()?.warn('structured.legacy_error',err?.message||String(err));}if(!r)r=await fallbackResearch(input);if(!r)return null;const m=model(input,r);D()?.ok('structured.model',{forms:m.forms,components:m.components,wholeMeaning:m.wholeMeaning});return render(m);};
+    e.build=async input=>{
+      D()?.push('structured.start','info',{input});
+
+      // Prefer the structured collector. The legacy link follower can mistake
+      // ordinary prose words (for example "can" or "the") for name forms.
+      const fallback=await fallbackResearch(input);
+      if(fallback){
+        const firstModel=model(input,fallback);
+        if(isUseful(firstModel)){
+          D()?.ok('structured.model',{forms:firstModel.forms,components:firstModel.components,wholeMeaning:firstModel.wholeMeaning,route:'structured-first'});
+          return render(firstModel);
+        }
+      }
+
+      let legacy=null;
+      try{legacy=await e.research?.(input);}catch(err){D()?.warn('structured.legacy_error',err?.message||String(err));}
+      const research=legacy||fallback;
+      if(!research)return null;
+      const finalModel=model(input,research);
+      D()?.ok('structured.model',{forms:finalModel.forms,components:finalModel.components,wholeMeaning:finalModel.wholeMeaning,route:legacy?'legacy':'structured-partial'});
+      return render(finalModel);
+    };
     e.__structuredWrapped=true;
   }
   install();window.addEventListener('DOMContentLoaded',install);window.StructuredEtymology={model,render,extractComponents,fallbackResearch};

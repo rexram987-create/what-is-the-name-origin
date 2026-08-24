@@ -178,13 +178,17 @@ function kindIcon(kind){return({
 })[kind]||'🔎';}
 
 function entityMeaningOptions(ranked,query){
-  const q=normalize(query),seenKinds=new Map(),options=[];
+  const q=normalize(query),seenKinds=new Map(),singletonKinds=new Set(),options=[];
   for(const rankedItem of ranked){
     const {item,score}=rankedItem,label=normalize(item.label);
     if(score<35||(!label.includes(q)&&!q.includes(label)))continue;
     const kind=candidateKind(item.description),key=`${kind}|${item.id}`;
     if(seenKinds.has(key))continue;
+    // Wikidata often has parallel records for spelling/transliteration variants
+    // of the same personal name. They are sources for one meaning, not separate meanings.
+    if((kind==='given-name'||kind==='surname')&&singletonKinds.has(kind))continue;
     seenKinds.set(key,true);
+    if(kind==='given-name'||kind==='surname')singletonKinds.add(kind);
     options.push({
       label:`${kindIcon(kind)} ${item.label||query}${item.description?` — ${item.description}`:''}`,
       name:item.label||query,
