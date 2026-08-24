@@ -39,6 +39,9 @@ h1{font-size:clamp(2.35rem,7vw,4.9rem);line-height:1.03;margin:0;font-weight:900
 .examples button:hover,.examples button:focus-visible{border-color:var(--accent);outline:none}
 .status-section{padding-top:24px}
 .status{padding:15px 18px;border:1px solid var(--line);background:var(--surface);border-radius:14px;color:var(--muted)}
+.meaning-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.meaning-choice{border:1px solid var(--line);background:var(--surface-2);color:var(--ink);padding:13px 15px;border-radius:12px;text-align:right;line-height:1.45}
+.meaning-choice:hover,.meaning-choice:focus-visible{border-color:var(--accent);background:var(--accent-soft);outline:none}
 .result-section{padding:34px 0 28px}
 .result-card{background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:clamp(22px,4vw,42px);box-shadow:var(--shadow)}
 .result-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:1px solid var(--line);padding-bottom:24px}
@@ -80,5 +83,6 @@ footer{border-top:1px solid var(--line);padding:24px 0 34px;color:var(--muted);f
   .sections-grid{grid-template-columns:1fr}
   .info-section.wide{grid-column:auto}
   .principles-grid{grid-template-columns:1fr}
+  .meaning-choices{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}

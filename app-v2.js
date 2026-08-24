@@ -71,6 +71,13 @@ form.addEventListener('submit',async event=>{
   const raw=queryInput.value.trim(); if(!raw)return;
   const ambiguity=AMBIGUITIES[raw.toLowerCase()];
   if(ambiguity)return showMeaningPicker(raw,ambiguity);
+  setStatus(`בודקים אם ל־„${raw}” יש כמה משמעויות…`);
+  resultSection.hidden=true;
+  try{
+    const meanings=await discoverMeaningOptions(raw);
+    if(meanings.length>1)return showMeaningPicker(raw,meanings);
+    if(meanings.length===1)return runSearch(meanings[0].name,meanings[0].context);
+  }catch(error){console.warn('Meaning discovery failed; continuing with the regular search.',error);}
   await runSearch(raw,null);
 });
 
@@ -88,6 +95,19 @@ function showMeaningPicker(raw,options){
 async function runSearch(query,context){
   const curated=context?.curatedKey?CURATED[context.curatedKey]:(CURATED[query.toLowerCase()]||CURATED[query]);
   if(curated)return showCurated(curated,query);
+
+  if(context?.kind==='lexical-sense'&&context.sense){
+    const result=window.LexicalSenseResolver?.buildResult?.(context.sense);
+    if(result){renderResult(result);statusSection.hidden=true;resultSection.hidden=false;resultSection.scrollIntoView({behavior:'smooth',block:'start'});return;}
+  }
+
+  if(context?.kind==='entity'&&context.item){
+    if(isGivenNameDescription(context.item.description)){
+      const done=await tryGivenName(context.item.label||query);
+      if(done)return;
+    }
+    return buildFromEntity(query,context,context.item);
+  }
 
   // Native given-name route: this is part of the main engine, not an after-the-fact hook.
   if(context?.kind==='given-name'){
@@ -138,6 +158,76 @@ function scoreCandidate(item,query,context){
   if(context.kind==='given-name'){if(isGivenNameDescription(item.description))s+=45;if(/city|capital|region|observatory|song|עיר|בירה|מחוז/.test(desc))s-=55;}
   if(context.kind==='surname'){if(/surname|family name|שם משפחה/.test(desc))s+=35;if(/city|capital|given name|עיר|בירה|שם פרטי/.test(desc))s-=40;}
   if(context.country&&desc.includes(normalize(context.country)))s+=35;if(context.region&&desc.includes(normalize(context.region)))s+=35;return s;
+}
+
+function candidateKind(description=''){
+  const desc=normalize(description);
+  if(isGivenNameDescription(description))return'given-name';
+  if(/surname|family name|שם משפחה/.test(desc))return'surname';
+  if(/city|capital|town|municipality|עיר|בירה|יישוב/.test(desc))return'city';
+  if(/country|sovereign state|מדינה/.test(desc))return'country';
+  if(/river|נהר|נחל/.test(desc))return'river';
+  if(/company|business|organization|חברה|ארגון/.test(desc))return'organization';
+  if(/human|person|actor|writer|politician|singer|אדם|שחקן|סופר|זמר/.test(desc))return'person';
+  return'concept';
+}
+
+function kindIcon(kind){return({
+  'given-name':'👤','surname':'👥','city':'🏙️','country':'🌍','river':'🌊',
+  'organization':'🏢','person':'👤','concept':'💡','lexical-sense':'📖'
+})[kind]||'🔎';}
+
+function entityMeaningOptions(ranked,query){
+  const q=normalize(query),seenKinds=new Map(),options=[];
+  for(const rankedItem of ranked){
+    const {item,score}=rankedItem,label=normalize(item.label);
+    if(score<35||(!label.includes(q)&&!q.includes(label)))continue;
+    const kind=candidateKind(item.description),key=`${kind}|${item.id}`;
+    if(seenKinds.has(key))continue;
+    seenKinds.set(key,true);
+    options.push({
+      label:`${kindIcon(kind)} ${item.label||query}${item.description?` — ${item.description}`:''}`,
+      name:item.label||query,
+      semanticKind:kind,
+      context:{kind:'entity',item,label:item.description||''}
+    });
+    if(options.length>=6)break;
+  }
+  return options;
+}
+
+function lexicalMeaningOptions(senses,query){
+  return senses.map(sense=>({
+    label:`${kindIcon('lexical-sense')} ${query} — ${sense.partOfSpeech}: ${short(sense.definition,110)} (${sense.language})`,
+    name:query,
+    semanticKind:'lexical-sense',
+    context:{kind:'lexical-sense',sense,label:sense.definition}
+  }));
+}
+
+async function discoverMeaningOptions(query){
+  const [rankedResult,sensesResult]=await Promise.allSettled([
+    resolveCandidates(query,null),
+    window.LexicalSenseResolver?.discover?.(query)||Promise.resolve([])
+  ]);
+  const ranked=rankedResult.status==='fulfilled'?rankedResult.value:[];
+  const senses=sensesResult.status==='fulfilled'?sensesResult.value:[];
+  let entities=entityMeaningOptions(ranked,query),lexical=lexicalMeaningOptions(senses,query);
+
+  // A dictionary "proper noun" entry and a Wikidata given-name item usually describe the same meaning.
+  if(entities.some(option=>option.semanticKind==='given-name')&&
+     lexical.length&&lexical.every(option=>/proper noun|שם פרטי/i.test(option.context.sense.partOfSpeechRaw||''))){
+    lexical=[];
+  }
+
+  const combined=[...entities,...lexical];
+  if(combined.length<=1)return combined;
+
+  // Ask only when there are genuinely different meanings, not duplicate records for the same concept.
+  const signatures=new Set(combined.map(option=>option.semanticKind==='lexical-sense'
+    ? `lexical|${normalize(option.context.sense.definition)}`
+    : `${option.semanticKind}|${option.context.item.id}`));
+  return signatures.size>1?combined:combined.slice(0,1);
 }
 
 function showEntityPicker(query,context,ranked){
