@@ -1,4 +1,4 @@
-// Historical place-name resolver v1.1.0
+// Historical place-name resolver v1.1.1
 // Resolves reviewed historical names first, then tries a conservative automatic Wikidata alias route.
 (() => {
   const normalize = (value = '') => String(value)
@@ -156,7 +156,7 @@
       const historicalHint = looksHistorical(best.item.description || '') || looksHistorical(entity.descriptions?.en?.value || '') || looksHistorical(entity.descriptions?.he?.value || '');
 
       // Conservative gate: only intercept if Wikidata itself treats the query as an alias/alternate label,
-      // or if the search result explicitly looks historical and points to a differently named place.
+      // or if the result explicitly looks historical and points to a differently named place.
       if (!matchedAsAlias && !(historicalHint && labelDiffers)) {
         autoCache.set(key, null);
         return null;
@@ -199,13 +199,18 @@
     return true;
   }
 
-  async function installSubmitInterceptor() {
+  function installSubmitInterceptor() {
     const form = document.getElementById('searchForm');
     const input = document.getElementById('query');
     if (!form || !input || form.dataset.historicalResolverInstalled === '1') return;
     form.dataset.historicalResolverInstalled = '1';
 
     form.addEventListener('submit', async event => {
+      if (form.dataset.historicalBypass === '1') {
+        delete form.dataset.historicalBypass;
+        return;
+      }
+
       const raw = input.value.trim();
       const reviewed = resolve(raw);
       if (reviewed) {
@@ -215,7 +220,6 @@
         return;
       }
 
-      // Try the automatic historical-alias route before generic meaning discovery.
       event.preventDefault();
       event.stopImmediatePropagation();
       const statusSection = document.getElementById('statusSection');
@@ -236,16 +240,9 @@
         return;
       }
 
-      // No historical match: hand control back to the normal app without looping through this interceptor.
+      // No historical match: hand control back to the normal app exactly once.
       form.dataset.historicalBypass = '1';
       form.requestSubmit();
-    }, true);
-
-    form.addEventListener('submit', event => {
-      if (form.dataset.historicalBypass === '1') {
-        delete form.dataset.historicalBypass;
-        return;
-      }
     }, true);
   }
 
