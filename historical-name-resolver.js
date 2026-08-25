@@ -1,6 +1,5 @@
-// Historical place-name resolver v1.0.0
-// Intercepts reviewed historical/variant place names before generic entity discovery.
-// The registry is intentionally data-driven so additional historical-name families can be added safely.
+// Historical place-name resolver v1.1.0
+// Resolves reviewed historical names first, then tries a conservative automatic Wikidata alias route.
 (() => {
   const normalize = (value = '') => String(value)
     .toLowerCase()
@@ -13,6 +12,7 @@
 
   const families = [];
   const aliasIndex = new Map();
+  const autoCache = new Map();
 
   function registerFamily(family) {
     if (!family?.id || !family?.result || !Array.isArray(family.aliases)) return;
@@ -72,6 +72,115 @@
     };
   }
 
+  async function json(url) {
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async function searchWikidata(query, language) {
+    const url = new URL('https://www.wikidata.org/w/api.php');
+    url.searchParams.set('action', 'wbsearchentities');
+    url.searchParams.set('search', query);
+    url.searchParams.set('language', language);
+    url.searchParams.set('uselang', 'he');
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('origin', '*');
+    url.searchParams.set('limit', '8');
+    return (await json(url)).search || [];
+  }
+
+  function looksLikePlace(description = '') {
+    return /city|town|capital|municipality|settlement|country|state|province|region|island|river|mountain|עיר|בירה|יישוב|מדינה|מחוז|אי|נהר|הר/i.test(description);
+  }
+
+  function looksHistorical(description = '') {
+    return /former|historical|old name|former name|previous name|ancient|medieval|renamed|historic|לשעבר|היסטורי|שם קודם|שם ישן|עתיק/i.test(description);
+  }
+
+  function scoreAuto(item, query) {
+    const q = normalize(query);
+    const label = normalize(item.label || '');
+    const desc = item.description || '';
+    let score = label === q ? 50 : (label.includes(q) || q.includes(label) ? 20 : 0);
+    if (looksLikePlace(desc)) score += 25;
+    if (looksHistorical(desc)) score += 18;
+    if (/human|person|song|album|film|surname|given name|אדם|שיר|אלבום|סרט|שם משפחה|שם פרטי/i.test(desc)) score -= 45;
+    return score;
+  }
+
+  async function getEntity(id) {
+    const url = new URL('https://www.wikidata.org/w/api.php');
+    url.searchParams.set('action', 'wbgetentities');
+    url.searchParams.set('ids', id);
+    url.searchParams.set('props', 'labels|descriptions|aliases|sitelinks');
+    url.searchParams.set('languages', 'he|en');
+    url.searchParams.set('sitefilter', 'hewiki|enwiki');
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('origin', '*');
+    return (await json(url)).entities?.[id] || null;
+  }
+
+  function entityAliases(entity) {
+    return [
+      ...(entity?.aliases?.he || []).map(x => x.value),
+      ...(entity?.aliases?.en || []).map(x => x.value)
+    ].filter(Boolean);
+  }
+
+  async function resolveAuto(query) {
+    const key = normalize(query);
+    if (!key || key.length < 3) return null;
+    if (autoCache.has(key)) return autoCache.get(key);
+
+    try {
+      const searches = await Promise.allSettled([
+        searchWikidata(query, 'he'),
+        searchWikidata(query, 'en')
+      ]);
+      const merged = [...new Map(searches.flatMap(r => r.status === 'fulfilled' ? r.value : []).map(x => [x.id, x])).values()];
+      const ranked = merged.map(item => ({ item, score: scoreAuto(item, query) })).sort((a, b) => b.score - a.score);
+      const best = ranked[0];
+      if (!best || best.score < 45) { autoCache.set(key, null); return null; }
+
+      const entity = await getEntity(best.item.id);
+      if (!entity) { autoCache.set(key, null); return null; }
+
+      const aliases = entityAliases(entity).map(normalize);
+      const heLabel = entity.labels?.he?.value || '';
+      const enLabel = entity.labels?.en?.value || best.item.label || query;
+      const canonical = heLabel || enLabel;
+      const canonicalKey = normalize(canonical);
+      const matchedAsAlias = aliases.includes(key);
+      const labelDiffers = canonicalKey && canonicalKey !== key;
+      const historicalHint = looksHistorical(best.item.description || '') || looksHistorical(entity.descriptions?.en?.value || '') || looksHistorical(entity.descriptions?.he?.value || '');
+
+      // Conservative gate: only intercept if Wikidata itself treats the query as an alias/alternate label,
+      // or if the search result explicitly looks historical and points to a differently named place.
+      if (!matchedAsAlias && !(historicalHint && labelDiffers)) {
+        autoCache.set(key, null);
+        return null;
+      }
+
+      const result = {
+        mode: 'auto',
+        matched: query,
+        canonical,
+        item: {
+          id: best.item.id,
+          label: canonical,
+          description: entity.descriptions?.he?.value || entity.descriptions?.en?.value || best.item.description || ''
+        }
+      };
+      autoCache.set(key, result);
+      return result;
+    } catch (error) {
+      console.warn('Historical auto resolution failed', error);
+      autoCache.set(key, null);
+      return null;
+    }
+  }
+
   function renderHistorical(match) {
     const statusSection = document.getElementById('statusSection');
     const resultSection = document.getElementById('resultSection');
@@ -90,24 +199,60 @@
     return true;
   }
 
-  function installSubmitInterceptor() {
+  async function installSubmitInterceptor() {
     const form = document.getElementById('searchForm');
     const input = document.getElementById('query');
     if (!form || !input || form.dataset.historicalResolverInstalled === '1') return;
     form.dataset.historicalResolverInstalled = '1';
 
-    form.addEventListener('submit', event => {
-      const match = resolve(input.value.trim());
-      if (!match) return;
+    form.addEventListener('submit', async event => {
+      const raw = input.value.trim();
+      const reviewed = resolve(raw);
+      if (reviewed) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        renderHistorical(reviewed);
+        return;
+      }
+
+      // Try the automatic historical-alias route before generic meaning discovery.
       event.preventDefault();
       event.stopImmediatePropagation();
-      renderHistorical(match);
+      const statusSection = document.getElementById('statusSection');
+      const status = document.getElementById('status');
+      if (status && statusSection) {
+        status.textContent = `בודקים אם „${raw}” הוא שם היסטורי או חלופי…`;
+        statusSection.hidden = false;
+      }
+
+      const auto = await resolveAuto(raw);
+      if (auto && typeof window.buildFromEntity === 'function') {
+        window.NameOriginDiagnostics?.ok?.('historical.auto_resolved', {
+          input: raw,
+          canonical: auto.canonical,
+          qid: auto.item.id
+        });
+        await window.buildFromEntity(raw, { kind: 'entity', item: auto.item, historicalAlias: true, canonicalName: auto.canonical }, auto.item);
+        return;
+      }
+
+      // No historical match: hand control back to the normal app without looping through this interceptor.
+      form.dataset.historicalBypass = '1';
+      form.requestSubmit();
+    }, true);
+
+    form.addEventListener('submit', event => {
+      if (form.dataset.historicalBypass === '1') {
+        delete form.dataset.historicalBypass;
+        return;
+      }
     }, true);
   }
 
   window.HistoricalNameResolver = {
     normalize,
     resolve,
+    resolveAuto,
     registerFamily,
     families
   };
