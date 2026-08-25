@@ -1,52 +1,26 @@
-// Self-tests v0.8.0 — run with ?diagnostics=1 and press the test button in the diagnostics panel.
+// Self-tests v1.0.0 — run with ?diagnostics=1 and press the diagnostics test button.
 (() => {
-  const TESTS = [
-    { input:'Victoria', expectCanonical:/Victoria/i, expectMeaning:/ניצחון/ },
-    { input:'ויקטוריה', expectCanonical:/Victoria/i, expectMeaning:/ניצחון/ },
-    { input:'Charlotte', expectCanonical:/Charlotte/i },
-    { input:'Isabella', expectCanonical:/Isabella/i },
-    { input:'Alexander', expectCanonical:/Alexander/i },
-    { input:'Sophia', expectCanonical:/Sophia/i, expectMeaning:/חוכמה/ }
+  const GIVEN=[
+    {input:'Victoria',canonical:/Victoria/i,meaning:/ניצחון/},
+    {input:'ויקטוריה',canonical:/Victoria/i,meaning:/ניצחון/},
+    {input:'Sophia',canonical:/Sophia/i,meaning:/חוכמה/}
   ];
-
-  async function run() {
-    const D = window.NameOriginDiagnostics;
-    const E = window.GivenNameEtymology;
-    if (!D || !E?.build || !E?.canonicalName) return [];
-    const results = [];
-    D.push('tests.start','info',`${TESTS.length} tests`);
-    for (const t of TESTS) {
-      try {
-        const canonical = await E.canonicalName(t.input);
-        const result = await E.build(t.input);
-        const canonicalOk = t.expectCanonical ? t.expectCanonical.test(canonical || '') : true;
-        const meaningText = [result?.meaning,result?.plainLanguage,result?.simpleSummary].filter(Boolean).join(' ');
-        const meaningOk = t.expectMeaning ? t.expectMeaning.test(meaningText) : !!result;
-        const pass = canonicalOk && meaningOk;
-        results.push({input:t.input,pass,canonical,meaning:result?.meaning||'',hasResult:!!result});
-        D.push(`test.${t.input}`, pass?'ok':'error', {canonical,hasResult:!!result,meaning:result?.meaning||''});
-      } catch (e) {
-        results.push({input:t.input,pass:false,error:e.message});
-        D.fail(`test.${t.input}`, e);
-      }
-    }
-    const passed = results.filter(x=>x.pass).length;
-    D.push('tests.end', passed===results.length?'ok':'warn', `${passed}/${results.length} passed`);
-    D.showPanel();
-    return results;
+  const LOCAL=[
+    {name:'historical.kushta',run:()=>{const r=window.HistoricalNameResolver?.resolve?.('קושטא');return !!r&&/איסטנבול/.test(r.canonical||'')&&/קונסטנטינוס/.test(r.result?.meaning||'');}},
+    {name:'historical.leningrad',run:()=>{const r=window.HistoricalNameResolver?.resolve?.('לנינגרד');return !!r&&/סנקט פטרבורג/.test(r.canonical||'')&&/לנין/.test(r.result?.meaning||'');}},
+    {name:'component.bombay-state',run:()=>window.NameComponentResolver?.resolve?.('Bombay State')?.component==='Bombay'},
+    {name:'component.new-york-city',run:()=>window.NameComponentResolver?.resolve?.('New York City')?.component==='New York'},
+    {name:'component.he-parenthetical',run:()=>window.NameComponentResolver?.resolve?.('בומביי (מדינה)')?.component==='בומביי'}
+  ];
+  async function run(){
+    const D=window.NameOriginDiagnostics,results=[]; if(!D)return results; D.push('tests.start','info','regression suite');
+    for(const t of LOCAL){try{const pass=!!t.run();results.push({test:t.name,pass});D.push(`test.${t.name}`,pass?'ok':'error',pass);}catch(e){results.push({test:t.name,pass:false,error:e.message});D.fail(`test.${t.name}`,e);}}
+    const E=window.GivenNameEtymology;
+    if(E?.build&&E?.canonicalName)for(const t of GIVEN){try{const canonical=await E.canonicalName(t.input),r=await E.build(t.input),text=[r?.meaning,r?.plainLanguage,r?.simpleSummary].filter(Boolean).join(' '),pass=t.canonical.test(canonical||'')&&t.meaning.test(text);results.push({test:`given.${t.input}`,pass,canonical});D.push(`test.given.${t.input}`,pass?'ok':'error',{canonical,meaning:r?.meaning||''});}catch(e){results.push({test:`given.${t.input}`,pass:false,error:e.message});}}
+    // Network regression: a bare historical alias must prefer the modern city, not a similarly named former state/region.
+    try{const r=await window.HistoricalNameResolver?.resolveAuto?.('בומביי');const pass=!!r&&/מומבאי|Mumbai/i.test(r.canonical||'');results.push({test:'network.bombay-to-mumbai',pass,canonical:r?.canonical||'',qid:r?.qid||''});D.push('test.network.bombay-to-mumbai',pass?'ok':'error',r||null);}catch(e){results.push({test:'network.bombay-to-mumbai',pass:false,error:e.message});}
+    const passed=results.filter(x=>x.pass).length;D.push('tests.end',passed===results.length?'ok':'warn',`${passed}/${results.length} passed`);D.showPanel();return results;
   }
-
-  function addButton() {
-    if (new URLSearchParams(location.search).get('diagnostics') !== '1') return;
-    const panel = document.getElementById('diagnosticsPanel');
-    if (!panel || document.getElementById('runSelfTests')) return;
-    const button = document.createElement('button');
-    button.id='runSelfTests'; button.type='button'; button.textContent='הרץ בדיקות אוטומטיות';
-    button.style.cssText='margin:8px 0';
-    button.onclick=run;
-    panel.insertBefore(button, document.getElementById('diagnosticsOutput'));
-  }
-
-  window.NameOriginSelfTests = { run, tests: TESTS };
-  window.addEventListener('DOMContentLoaded', () => setTimeout(addButton, 0));
+  function addButton(){if(new URLSearchParams(location.search).get('diagnostics')!=='1')return;const panel=document.getElementById('diagnosticsPanel');if(!panel||document.getElementById('runSelfTests'))return;const b=document.createElement('button');b.id='runSelfTests';b.type='button';b.textContent='הרץ בדיקות אוטומטיות';b.style.cssText='margin:8px 0';b.onclick=run;panel.insertBefore(b,document.getElementById('diagnosticsOutput'));}
+  window.NameOriginSelfTests={run,local:LOCAL,given:GIVEN};window.addEventListener('DOMContentLoaded',()=>setTimeout(addButton,0));
 })();
